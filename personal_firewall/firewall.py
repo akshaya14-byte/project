@@ -1,11 +1,10 @@
-# firewall.py
-
 from scapy.all import sniff, IP, TCP, UDP
 import json
 import logging
-from datetime import datetime
 import csv
 import os
+from datetime import datetime
+
 # Load rules from JSON
 def load_rules(path='rules.json'):
     with open(path, 'r') as f:
@@ -15,19 +14,32 @@ rules = load_rules()
 
 # Setup logging
 logging.basicConfig(filename='firewall.log', level=logging.INFO)
-#Setup CSv logging
+
+# Setup CSV logging
 csv_file = 'firewall_log.csv'
-csv_headers = ['Timestamp','Action','Source IP','Destination IP','Protocol','Reason']
+csv_headers = ['Timestamp', 'Action', 'Source IP', 'Destination IP', 'Protocol', 'Reason']
+
+if not os.path.exists(csv_file):
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(csv_headers)
+
 def log_block(packet, reason):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    summary = packet.summary()
-    logging.info(f"[{timestamp}] BLOCKED: {summary} | Reason: {reason}")
-    print(f"[BLOCKED] {summary} | Reason: {reason}")
+    src_ip = packet[IP].src if IP in packet else 'N/A'
+    dst_ip = packet[IP].dst if IP in packet else 'N/A'
+    proto = packet.proto if IP in packet else 'N/A'
+
+    print(f"[BLOCKED] {packet.summary()} | Reason: {reason}")
+    logging.info(f"[{timestamp}] BLOCKED: {packet.summary()} | Reason: {reason}")
+
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([timestamp, 'BLOCKED', src_ip, dst_ip, proto, reason])
 
 def log_allow(packet):
     print(f"[ALLOWED] {packet.summary()}")
 
-# Apply rules to each packet
 def apply_rules(packet):
     if IP in packet:
         src_ip = packet[IP].src
@@ -51,10 +63,10 @@ def apply_rules(packet):
 
     return True
 
-# Sniff packets and apply rules
 def packet_callback(packet):
     if apply_rules(packet):
         log_allow(packet)
 
 print("🔥 Personal Firewall Started. Press Ctrl+C to stop.")
 sniff(prn=packet_callback, store=0)
+
